@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/DilankaHer/sop-in-go/internal/app"
+	"github.com/DilankaHer/sop-in-go/internal/logger"
+	"github.com/DilankaHer/sop-in-go/internal/middleware"
 )
 
 type routeResponseEnvelope struct {
@@ -17,7 +19,11 @@ type routeResponseEnvelope struct {
 }
 
 func TestInitRoutesRegistersVersion(t *testing.T) {
-	application := &app.App{}
+	log := logger.NewLogger()
+	application := &app.App{
+		Logger:     log,
+		Middleware: middleware.NewMiddleware(log),
+	}
 	router := InitRoutes(application)
 	rec := httptest.NewRecorder()
 
@@ -37,8 +43,8 @@ func TestInitRoutesRegistersVersion(t *testing.T) {
 	if got.Status != http.StatusOK {
 		t.Fatalf("envelope status = %d, want %d", got.Status, http.StatusOK)
 	}
-	if got.Message != "success" {
-		t.Fatalf("message = %q, want %q", got.Message, "success")
+	if got.Message != "OK" {
+		t.Fatalf("message = %q, want %q", got.Message, "OK")
 	}
 	if string(got.Data) != "{\"version\":\"v1.1\"}" {
 		t.Fatalf("data = %s, want %s", got.Data, "{\"version\":\"v1.1\"}")

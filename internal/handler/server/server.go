@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/DilankaHer/sop-in-go/internal/app"
-	"github.com/DilankaHer/sop-in-go/internal/utility"
+	"github.com/DilankaHer/sop-in-go/internal/middleware"
 )
 
 type ServerHandler struct {
@@ -21,6 +21,9 @@ func NewServerHandler(app *app.App) *ServerHandler {
 	}
 }
 
-func (h *ServerHandler) Version(w http.ResponseWriter, r *http.Request) {
-	utility.WriteJSON(w, http.StatusOK, "success", getVersionResp{Version: "v1.1"})
+func (h *ServerHandler) Version(r *http.Request) (resp middleware.StandardResponse) {
+	resp.Data = getVersionResp{Version: "v1.1"}
+	resp.Status = http.StatusOK
+	resp.Message = http.StatusText(resp.Status)
+	return
 }

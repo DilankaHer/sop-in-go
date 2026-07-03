@@ -3,95 +3,54 @@ package app
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
-	"github.com/joho/godotenv"
+	"github.com/go-playground/validator/v10"
+	"github.com/spf13/viper"
 )
 
 type Config struct {
-	Port string
+	Server `yaml:"server" validate:"required"`
+}
+
+type Server struct {
+	Port string `yaml:"port" validate:"required"`
 }
 
 func GetConfig() (*Config, error) {
-	env := os.Getenv("ENV")
-
-	switch env {
-	case "sit":
-		err := godotenv.Load(".env.sit")
-		if err != nil {
-			return nil, err
-		}
-	case "prod":
-		err := godotenv.Load(".env.prod")
-		if err != nil {
-			return nil, err
-		}
-	default:
-		err := godotenv.Load(".env.local")
-		if err != nil {
-			return nil, err
-		}
+	configName := os.Getenv("ENV")
+	if os.Getenv("ENV") == "prod" {
+		configName = ".env.prod"
+	} else if os.Getenv("ENV") == "sit" {
+		configName = ".env.sit"
+	} else {
+		configName = ".env.local"
 	}
+	viper.SetConfigName(configName)
+	viper.SetConfigType("yml")
+	viper.AddConfigPath(".")
 
-	err := validateVars()
-	if err != nil {
+	if err := viper.ReadInConfig(); err != nil {
 		return nil, err
 	}
 
-	return &Config{
-		Port: os.Getenv("PORT"),
-	}, nil
+	var cfg Config
+	if err := viper.Unmarshal(&cfg); err != nil {
+		return nil, err
+	}
+
+	validate := validator.New()
+	if err := validate.Struct(cfg); err != nil {
+		return nil, fmt.Errorf("%s", formatValidationError(err.(validator.ValidationErrors)))
+	}
+
+	return &cfg, nil
 }
 
-func validateVars() error {
-	unset := []string{}
-	empty := []string{}
-	invalid := []map[string]string{}
-	vars := []string{"PORT"}
-	var errors string
-
-	for _, v := range vars {
-		val, ok := os.LookupEnv(v)
-		if !ok {
-			unset = append(unset, v)
-		} else if val == "" {
-			empty = append(empty, v)
-		}
-		if v == "PORT" {
-			valStr, err := strconv.Atoi(val)
-			if err != nil {
-				invalid = append(invalid, map[string]string{v: fmt.Sprintf("%s is not a valid port", val)})
-			} else if valStr < 3000 || valStr > 65535 {
-				invalid = append(invalid, map[string]string{v: fmt.Sprintf("%s is not a valid port", val)})
-			}
-		}
+func formatValidationError(err validator.ValidationErrors) string {
+	errors := []string{}
+	for _, e := range err {
+		errors = append(errors, e.Field())
 	}
-
-	if len(unset) > 0 {
-		errors = "unset variables => " + strings.Join(unset, ", ") + "\n"
-	}
-
-	if len(empty) > 0 {
-		errors = errors + "empty variables => " + strings.Join(empty, ", ") + "\n"
-	}
-
-	if len(invalid) > 0 {
-		var e string
-		for _, v := range invalid {
-			e = "invalid variables => "
-			for k, err := range v {
-				e = e + fmt.Sprintf("%s: %s", k, err)
-			}
-		}
-		if e != "" {
-			errors = errors + e + "\n"
-		}
-	}
-
-	if errors != "" {
-		return fmt.Errorf("%s", errors)
-	}
-
-	return nil
+	return fmt.Sprintf("missing/invalid vars: %s", strings.Join(errors, ", "))
 }

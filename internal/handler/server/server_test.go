@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -9,42 +8,26 @@ import (
 	"github.com/DilankaHer/sop-in-go/internal/app"
 )
 
-type versionResponseEnvelope struct {
-	Status  int             `json:"status"`
-	Message string          `json:"message"`
-	Data    json.RawMessage `json:"data"`
-	Error   json.RawMessage `json:"error"`
-}
+func TestVersionReturnsCurrentVersion(t *testing.T) {
+	handler := NewServerHandler(&app.App{})
 
-func TestVersionWritesCurrentVersion(t *testing.T) {
-	application := &app.App{}
-	handler := NewServerHandler(application)
-	rec := httptest.NewRecorder()
+	resp := handler.Version(httptest.NewRequest(http.MethodGet, "/version", nil))
 
-	handler.Version(rec, httptest.NewRequest(http.MethodGet, "/version", nil))
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	if resp.Status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.Status, http.StatusOK)
 	}
-	if got := rec.Header().Get("Content-Type"); got != "application/json" {
-		t.Fatalf("Content-Type = %q, want %q", got, "application/json")
+	if resp.Message != http.StatusText(http.StatusOK) {
+		t.Fatalf("message = %q, want %q", resp.Message, http.StatusText(http.StatusOK))
 	}
-
-	var got versionResponseEnvelope
-	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
-		t.Fatalf("decode body: %v", err)
+	data, ok := resp.Data.(getVersionResp)
+	if !ok {
+		t.Fatalf("data type = %T, want getVersionResp", resp.Data)
 	}
-	if got.Status != http.StatusOK {
-		t.Fatalf("envelope status = %d, want %d", got.Status, http.StatusOK)
+	if data.Version != "v1.1" {
+		t.Fatalf("version = %q, want %q", data.Version, "v1.1")
 	}
-	if got.Message != "success" {
-		t.Fatalf("message = %q, want %q", got.Message, "success")
-	}
-	if string(got.Data) != `{"version":"v1.1"}` {
-		t.Fatalf("data = %s, want %s", got.Data, `{"version":"v1.1"}`)
-	}
-	if string(got.Error) != "null" {
-		t.Fatalf("error = %s, want null", got.Error)
+	if resp.Error != nil {
+		t.Fatalf("error = %v, want nil", resp.Error)
 	}
 }
 

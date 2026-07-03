@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 
@@ -17,8 +16,8 @@ func main() {
 
 	r := router.InitRoutes(app)
 
-	fmt.Println("Server running on port:", app.Config.Port)
-	err = http.ListenAndServe(":"+app.Config.Port, r)
+	app.Logger.Debug("Server running on port", app.Config.Server.Port)
+	err = http.ListenAndServe(":"+app.Config.Server.Port, r)
 	if err != nil {
 		log.Fatalf("error during serving server: %s", err.Error())
 	}

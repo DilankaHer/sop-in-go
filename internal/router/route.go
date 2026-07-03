@@ -11,6 +11,11 @@ func InitRoutes(app *app.App) *chi.Mux {
 
 	handler := handler.NewHandler(app)
 
-	r.Get("/version", handler.ServerHandler.Version)
+	r.Use(app.Middleware.Recover)
+	r.Use(app.Middleware.AccessLog)
+
+	api := NewJSONRoutes(r, app.Middleware)
+	api.Get("/version", handler.ServerHandler.Version)
+
 	return r
 }

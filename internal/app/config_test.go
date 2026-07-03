@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/spf13/viper"
 )
 
 func setEnv(t *testing.T, key, value string) {
@@ -54,7 +56,12 @@ func chdir(t *testing.T, dir string) {
 	})
 }
 
-func writeEnvFile(t *testing.T, dir, name, contents string) {
+func resetViper(t *testing.T) {
+	t.Helper()
+	viper.Reset()
+}
+
+func writeConfigFile(t *testing.T, dir, name, contents string) {
 	t.Helper()
 
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(contents), 0o600); err != nil {
@@ -62,95 +69,90 @@ func writeEnvFile(t *testing.T, dir, name, contents string) {
 	}
 }
 
-func setValidPort(t *testing.T) {
-	t.Helper()
-	setEnv(t, "PORT", "8080")
-}
-
 func TestGetConfigLoadsLocalEnvFile(t *testing.T) {
 	dir := t.TempDir()
-	writeEnvFile(t, dir, ".env.local", "PORT=5000\n")
+	writeConfigFile(t, dir, ".env.local.yml", "server:\n  port: \"5000\"\n")
 	chdir(t, dir)
+	resetViper(t)
 	setEnv(t, "ENV", "local")
-	unsetEnv(t, "PORT")
 
 	cfg, err := GetConfig()
 	if err != nil {
 		t.Fatalf("GetConfig() error = %v", err)
 	}
-	if cfg.Port != "5000" {
-		t.Fatalf("Port = %q, want %q", cfg.Port, "5000")
+	if cfg.Server.Port != "5000" {
+		t.Fatalf("Port = %q, want %q", cfg.Server.Port, "5000")
 	}
 }
 
 func TestGetConfigTreatsUnsetEnvAsLocal(t *testing.T) {
 	dir := t.TempDir()
-	writeEnvFile(t, dir, ".env.local", "PORT=4000\n")
+	writeConfigFile(t, dir, ".env.local.yml", "server:\n  port: \"4000\"\n")
 	chdir(t, dir)
+	resetViper(t)
 	unsetEnv(t, "ENV")
-	unsetEnv(t, "PORT")
 
 	cfg, err := GetConfig()
 	if err != nil {
 		t.Fatalf("GetConfig() error = %v", err)
 	}
-	if cfg.Port != "4000" {
-		t.Fatalf("Port = %q, want %q", cfg.Port, "4000")
+	if cfg.Server.Port != "4000" {
+		t.Fatalf("Port = %q, want %q", cfg.Server.Port, "4000")
 	}
 }
 
 func TestGetConfigLoadsProdEnvFile(t *testing.T) {
 	dir := t.TempDir()
-	writeEnvFile(t, dir, ".env.prod", "PORT=9000\n")
+	writeConfigFile(t, dir, ".env.prod.yml", "server:\n  port: \"9000\"\n")
 	chdir(t, dir)
+	resetViper(t)
 	setEnv(t, "ENV", "prod")
-	unsetEnv(t, "PORT")
 
 	cfg, err := GetConfig()
 	if err != nil {
 		t.Fatalf("GetConfig() error = %v", err)
 	}
-	if cfg.Port != "9000" {
-		t.Fatalf("Port = %q, want %q", cfg.Port, "9000")
+	if cfg.Server.Port != "9000" {
+		t.Fatalf("Port = %q, want %q", cfg.Server.Port, "9000")
 	}
 }
 
-func TestGetConfigSitEnvLoadsLocalEnvFile(t *testing.T) {
+func TestGetConfigSitEnvLoadsSitEnvFile(t *testing.T) {
 	dir := t.TempDir()
-	writeEnvFile(t, dir, ".env.sit", "PORT=7000\n")
+	writeConfigFile(t, dir, ".env.sit.yml", "server:\n  port: \"7000\"\n")
 	chdir(t, dir)
+	resetViper(t)
 	setEnv(t, "ENV", "sit")
-	unsetEnv(t, "PORT")
 
 	cfg, err := GetConfig()
 	if err != nil {
 		t.Fatalf("GetConfig() error = %v", err)
 	}
-	if cfg.Port != "7000" {
-		t.Fatalf("Port = %q, want %q", cfg.Port, "7000")
+	if cfg.Server.Port != "7000" {
+		t.Fatalf("Port = %q, want %q", cfg.Server.Port, "7000")
 	}
 }
 
 func TestGetConfigUnknownEnvLoadsLocalEnvFile(t *testing.T) {
 	dir := t.TempDir()
-	writeEnvFile(t, dir, ".env.local", "PORT=6000\n")
+	writeConfigFile(t, dir, ".env.local.yml", "server:\n  port: \"6000\"\n")
 	chdir(t, dir)
+	resetViper(t)
 	setEnv(t, "ENV", "development")
-	unsetEnv(t, "PORT")
 
 	cfg, err := GetConfig()
 	if err != nil {
 		t.Fatalf("GetConfig() error = %v", err)
 	}
-	if cfg.Port != "6000" {
-		t.Fatalf("Port = %q, want %q", cfg.Port, "6000")
+	if cfg.Server.Port != "6000" {
+		t.Fatalf("Port = %q, want %q", cfg.Server.Port, "6000")
 	}
 }
 
 func TestGetConfigReturnsErrorWhenLocalEnvFileMissing(t *testing.T) {
 	chdir(t, t.TempDir())
+	resetViper(t)
 	setEnv(t, "ENV", "local")
-	unsetEnv(t, "PORT")
 
 	_, err := GetConfig()
 	if err == nil {
@@ -163,8 +165,8 @@ func TestGetConfigReturnsErrorWhenLocalEnvFileMissing(t *testing.T) {
 
 func TestGetConfigReturnsErrorWhenProdEnvFileMissing(t *testing.T) {
 	chdir(t, t.TempDir())
+	resetViper(t)
 	setEnv(t, "ENV", "prod")
-	unsetEnv(t, "PORT")
 
 	_, err := GetConfig()
 	if err == nil {
@@ -175,96 +177,36 @@ func TestGetConfigReturnsErrorWhenProdEnvFileMissing(t *testing.T) {
 	}
 }
 
-func TestValidateVars(t *testing.T) {
-	t.Run("valid port in range", func(t *testing.T) {
-		setValidPort(t)
+func TestGetConfigValidation(t *testing.T) {
+	t.Run("missing port", func(t *testing.T) {
+		dir := t.TempDir()
+		writeConfigFile(t, dir, ".env.local.yml", "server:\n")
+		chdir(t, dir)
+		resetViper(t)
+		unsetEnv(t, "ENV")
 
-		if err := validateVars(); err != nil {
-			t.Fatalf("validateVars() error = %v, want nil", err)
-		}
-	})
-
-	t.Run("accepts upper bound port", func(t *testing.T) {
-		setEnv(t, "PORT", "65535")
-
-		if err := validateVars(); err != nil {
-			t.Fatalf("validateVars() error = %v, want nil", err)
-		}
-	})
-
-	t.Run("unset port", func(t *testing.T) {
-		unsetEnv(t, "PORT")
-
-		err := validateVars()
+		_, err := GetConfig()
 		if err == nil {
-			t.Fatal("validateVars() error = nil, want error")
+			t.Fatal("GetConfig() error = nil, want error")
 		}
-		if !strings.Contains(err.Error(), "unset variables => PORT") {
-			t.Fatalf("error = %q, want unset PORT", err.Error())
+		if !strings.Contains(err.Error(), "missing/invalid vars: Port") {
+			t.Fatalf("error = %q, want missing Port", err.Error())
 		}
 	})
 
 	t.Run("empty port", func(t *testing.T) {
-		setEnv(t, "PORT", "")
+		dir := t.TempDir()
+		writeConfigFile(t, dir, ".env.local.yml", "server:\n  port: \"\"\n")
+		chdir(t, dir)
+		resetViper(t)
+		unsetEnv(t, "ENV")
 
-		err := validateVars()
+		_, err := GetConfig()
 		if err == nil {
-			t.Fatal("validateVars() error = nil, want error")
+			t.Fatal("GetConfig() error = nil, want error")
 		}
-		if !strings.Contains(err.Error(), "empty variables => PORT") {
-			t.Fatalf("error = %q, want empty PORT", err.Error())
-		}
-	})
-
-	t.Run("non numeric port", func(t *testing.T) {
-		setEnv(t, "PORT", "abc")
-
-		err := validateVars()
-		if err == nil {
-			t.Fatal("validateVars() error = nil, want error")
-		}
-		if !strings.Contains(err.Error(), "invalid variables => PORT: abc is not a valid port") {
-			t.Fatalf("error = %q, want invalid PORT", err.Error())
-		}
-	})
-
-	t.Run("port below range", func(t *testing.T) {
-		setEnv(t, "PORT", "2999")
-
-		err := validateVars()
-		if err == nil {
-			t.Fatal("validateVars() error = nil, want error")
-		}
-		if !strings.Contains(err.Error(), "invalid variables => PORT: 2999 is not a valid port") {
-			t.Fatalf("error = %q, want invalid PORT", err.Error())
-		}
-	})
-
-	t.Run("port above max", func(t *testing.T) {
-		setEnv(t, "PORT", "65536")
-
-		err := validateVars()
-		if err == nil {
-			t.Fatal("validateVars() error = nil, want error")
-		}
-		if !strings.Contains(err.Error(), "invalid variables => PORT: 65536 is not a valid port") {
-			t.Fatalf("error = %q, want invalid PORT", err.Error())
-		}
-	})
-
-	t.Run("aggregates unset and invalid port errors", func(t *testing.T) {
-		unsetEnv(t, "PORT")
-
-		err := validateVars()
-		if err == nil {
-			t.Fatal("validateVars() error = nil, want error")
-		}
-		errMsg := err.Error()
-		if !strings.Contains(errMsg, "unset variables => PORT") {
-			t.Fatalf("error = %q, want unset PORT", errMsg)
-		}
-		if !strings.Contains(errMsg, "invalid variables => PORT:") {
-			t.Fatalf("error = %q, want invalid PORT", errMsg)
+		if !strings.Contains(err.Error(), "missing/invalid vars: Port") {
+			t.Fatalf("error = %q, want empty Port", err.Error())
 		}
 	})
 }
